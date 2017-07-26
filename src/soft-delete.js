@@ -1,6 +1,8 @@
 import _debug from './debug';
 const debug = _debug();
 
+import { createPromiseCallback } from 'loopback/lib/utils'
+
 export default (Model, { deletedAt = 'deletedAt', scrub = false }) => {
   debug('SoftDelete mixin for Model %s', Model.modelName);
 
@@ -22,29 +24,40 @@ export default (Model, { deletedAt = 'deletedAt', scrub = false }) => {
   Model.defineProperty(deletedAt, {type: Date, required: false});
 
   Model.destroyAll = function softDestroyAll(where, cb) {
-    return Model.updateAll(where, { ...scrubbed, [deletedAt]: new Date() })
-      .then(result => (typeof cb === 'function') ? cb(null, result) : result)
-      .catch(error => (typeof cb === 'function') ? cb(error) : Promise.reject(error));
+    cb = cb || createPromiseCallback()
+
+    Model.updateAll(where, { ...scrubbed, [deletedAt]: new Date() })
+      .then(result => cb(null, result))
+      .catch(error => cb(error));
+
+    return cb.promise
   };
 
   Model.remove = Model.destroyAll;
   Model.deleteAll = Model.destroyAll;
 
   Model.destroyById = function softDestroyById(id, cb) {
-    return Model.updateAll({ [idName]: id }, { ...scrubbed, [deletedAt]: new Date()})
-      .then(result => (typeof cb === 'function') ? cb(null, result) : result)
-      .catch(error => (typeof cb === 'function') ? cb(error) : Promise.reject(error));
+    cb = cb || createPromiseCallback()
+
+    Model.updateAll({ [idName]: id }, { ...scrubbed, [deletedAt]: new Date()})
+      .then(result => cb(null, result))
+      .catch(error => cb(error));
+
+    return cb.promise
   };
 
   Model.removeById = Model.destroyById;
   Model.deleteById = Model.destroyById;
 
   Model.prototype.destroy = function softDestroy(options, cb) {
-    const callback = (cb === undefined && typeof options === 'function') ? options : cb;
+    cb = (cb === undefined && typeof options === 'function') ? options : cb;
+    cb = cb || createPromiseCallback()
 
-    return this.updateAttributes({ ...scrubbed, [deletedAt]: new Date() })
-      .then(result => (typeof callback === 'function') ? callback(null, result) : result)
-      .catch(error => (typeof callback === 'function') ? callback(error) : Promise.reject(error));
+    this.updateAttributes({ ...scrubbed, [deletedAt]: new Date() })
+      .then(result => cb(null, result))
+      .catch(error => cb(error));
+
+    return cb.promise
   };
 
   Model.prototype.remove = Model.prototype.destroy;
